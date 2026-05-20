@@ -29,26 +29,47 @@ Solo individual (initially: the builder themselves) who:
 
 | Source | What it captures | Effort |
 |---|---|---|
-| Browser history | Sites visited, time spent (LeetCode, GitHub, YouTube) | Low |
-| Calendar | Meetings, blocked time, events | Low |
+| ActivityWatch (browser) | Time spent on configured sites (LeetCode, LinkedIn, GitHub, etc.) | Low |
 | Gmail | Emails sent/received, recruiters, decisions | Low |
-| Git commits | Code written, repos worked on | Low |
-| LeetCode API | Problems solved, submissions, difficulty | Medium |
+| LeetCode API | Problems solved, submissions, pass/fail, difficulty | Medium |
+| Git commits | Code written, repos worked on | Medium |
 | App/screen time | Time per app on desktop/mobile | Medium |
 | Screen summarization | Periodic screenshot → AI summary | High |
 | Voice | Ambient transcription + summarization | High |
 
-**MVP focuses on:** Browser history + Calendar + Gmail + LeetCode
+### Site Tracking Config
+Users define which sites to track via a config file. ActivityWatch captures time on any configured site — no custom connector needed per site.
+
+```yaml
+sources:
+  - name: LeetCode
+    type: browser
+    url: leetcode.com
+    category: coding_practice
+  - name: LinkedIn
+    type: browser
+    url: linkedin.com
+    category: job_search
+  - name: GitHub
+    type: browser
+    url: github.com
+    category: coding
+  - name: Gmail
+    type: api
+    connector: gmail
+    category: communication
+```
 
 ---
 
 ## Core Features
 
 ### 1. Passive Activity Logging
-- Runs silently in the background (browser extension + desktop agent)
-- Every N minutes, summarizes what you've been doing
-- Stores structured activity log: `{timestamp, activity, category, duration, notes}`
-- Example: *"3:00–5:30pm — LeetCode: solved 2 medium problems (Binary Search, Sliding Window)"*
+- ActivityWatch runs silently in the background, tracking time per configured site
+- Syncs every hour to pull activity and store in local SQLite
+- Gmail syncs every hour for new emails
+- Stores structured activity log: `{timestamp, source, activity, category, duration, notes}`
+- Example: *"3:00–5:30pm — LeetCode: 2.5 hrs on leetcode.com"*
 
 ### 2. Brain Dump
 - Frictionless quick capture: voice memo, text, photo
@@ -70,18 +91,51 @@ Solo individual (initially: the builder themselves) who:
 
 ---
 
-## Out of Scope (V1)
-- Multi-user / team features
-- Mobile app (desktop + browser extension first)
-- Integrations beyond the MVP capture sources
+## Technical Stack
+
+- **Backend**: Python + FastAPI
+- **Frontend**: HTMX (server-rendered, minimal JavaScript)
+- **Storage**: Local SQLite (privacy-first, no cloud required)
+- **AI layer**: Claude API for summarization, categorization, Q&A
+- **Activity tracking**: ActivityWatch (local app + Chrome extension)
+- **Sync frequency**: Hourly
 
 ---
 
-## Technical Architecture (High Level)
-- **Capture layer**: Browser extension + lightweight desktop agent
-- **Storage**: Local SQLite (privacy-first, no cloud required)
-- **AI layer**: Claude API for summarization, categorization, Q&A
-- **Interface**: Simple web UI (FastAPI + HTMX) or CLI
+## Phased Implementation
+
+### Phase 1 — Foundation
+**Goal:** Working app that captures activity and answers basic questions
+
+Sources:
+- ActivityWatch (browser time tracking for configured sites)
+- Gmail
+
+Features:
+- Config system for which sites to track
+- Hourly sync from ActivityWatch API + Gmail API
+- SQLite storage
+- Web UI (FastAPI + HTMX)
+- Basic Q&A: *"What did I do today?"*
+
+### Phase 2 — Richer Data
+- LeetCode API (submission history, pass/fail, difficulty)
+- Git commits
+- Daily summary generation
+- Semantic search
+
+### Phase 3 — Intelligence
+- Context resume
+- Brain dump (voice, text, photo)
+- Proactive reminders for open loops
+- Smarter summarization across sources
+
+---
+
+## Out of Scope (V1)
+- Multi-user / team features
+- Mobile app
+- Building a custom browser extension (using ActivityWatch instead)
 
 ---
 
