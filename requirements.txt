@@ -1,7 +1,5 @@
 fastapi
 uvicorn
-htmx
-anthropic
 pyyaml
 python-dotenv
 httpx

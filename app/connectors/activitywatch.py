@@ -1,12 +1,13 @@
 import httpx
 import os
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 AW_URL = os.getenv("ACTIVITYWATCH_URL", "http://localhost:5600")
 
 
 def get_buckets() -> list[dict]:
-    response = httpx.get(f"{AW_URL}/api/0/buckets")
+    response = httpx.get(f"{AW_URL}/api/0/buckets/")
     response.raise_for_status()
     return list(response.json().values())
 
@@ -43,15 +44,19 @@ def get_browser_activity(start: datetime, end: datetime, tracked_urls: list[str]
         title = event.get("data", {}).get("title", "")
         duration = event.get("duration", 0)
 
+        # Match against configured URLs, fall back to the domain name
+        matched_source = urlparse(url).netloc or "other"
         for tracked_url in tracked_urls:
             if tracked_url in url:
-                results.append({
-                    "url": url,
-                    "title": title,
-                    "duration_seconds": int(duration),
-                    "timestamp": event.get("timestamp"),
-                    "matched_source": tracked_url,
-                })
+                matched_source = tracked_url
                 break
+
+        results.append({
+            "url": url,
+            "title": title,
+            "duration_seconds": int(duration),
+            "timestamp": event.get("timestamp"),
+            "matched_source": matched_source,
+        })
 
     return results

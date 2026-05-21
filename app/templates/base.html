@@ -14,6 +14,23 @@
         input[type=text] { width: 70%; padding: 8px; font-size: 16px; }
         button { padding: 8px 16px; font-size: 16px; cursor: pointer; }
         .answer { background: #f9f9f9; border-left: 4px solid #555; padding: 16px; margin-top: 16px; }
+        .pagination { margin-top: 16px; display: flex; gap: 16px; align-items: center; }
+        .pagination a { text-decoration: none; color: #333; font-weight: bold; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+        .tab-btn { padding: 8px 20px; border: 1px solid #ddd; border-radius: 6px; background: #f5f5f5; cursor: pointer; font-size: 14px; }
+        .tab-btn.active { background: #333; color: white; border-color: #333; }
+        .session-card { border: 1px solid #ddd; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+        .session-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 14px 16px; cursor: pointer; background: #fafafa; }
+        .session-header:hover { background: #f0f0f0; }
+        .session-summary { color: #555; font-size: 13px; margin: 4px 0 0; }
+        .session-meta { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+        .session-events { padding: 8px 16px 12px; border-top: 1px solid #eee; }
+        .event-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 13px; border-bottom: 1px solid #f5f5f5; }
+        .event-row span { flex: 1; }
+        .event-row small { color: #888; white-space: nowrap; }
+        .chevron { font-size: 11px; color: #888; }
+        .htmx-indicator { display: none; }
+        .htmx-request .htmx-indicator { display: inline; }
     </style>
 </head>
 <body>

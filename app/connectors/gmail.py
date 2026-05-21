@@ -31,7 +31,7 @@ def get_gmail_service():
 
 def get_recent_emails(hours: int = 1) -> list[dict]:
     service = get_gmail_service()
-    query = f"newer_than:{hours}h"
+    query = f"newer_than:{hours}h -category:promotions -category:social"
 
     results = service.users().messages().list(userId="me", q=query, maxResults=50).execute()
     messages = results.get("messages", [])

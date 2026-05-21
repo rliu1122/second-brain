@@ -3,43 +3,84 @@
 {% block content %}
 <h1>Today's Activity</h1>
 
-<form hx-post="/ask" hx-target="#answer" hx-swap="innerHTML">
+<form hx-post="/ask" hx-target="#answer" hx-swap="innerHTML" hx-indicator="#spinner">
     <input type="text" name="question" placeholder="What did I work on today?" />
     <button type="submit">Ask</button>
+    <span id="spinner" class="htmx-indicator"> ⏳ Thinking...</span>
 </form>
 
 <div id="answer"></div>
 
 <hr>
 
-<h2>Browser Activity</h2>
-{% if activities %}
-    {% for a in activities %}
-    <div class="card">
-        <strong>{{ a.source }}</strong>
-        <span class="tag">{{ a.category }}</span>
-        <p>{{ a.title }}</p>
-        <small>{{ (a.duration_seconds // 60) }} mins &mdash; {{ a.timestamp }}</small>
-    </div>
-    {% endfor %}
-{% else %}
-    <p>No browser activity recorded yet.</p>
-{% endif %}
+<div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('sessions')">🧩 Sessions</button>
+    <button class="tab-btn" onclick="switchTab('emails')">✉️ Emails</button>
+</div>
 
-<h2>Emails</h2>
-{% if emails %}
-    {% for e in emails %}
-    <div class="card">
-        <strong>{{ e.subject }}</strong>
-        <p><small>From: {{ e.sender }}</small></p>
-        <p>{{ e.snippet }}</p>
-        <small>{{ e.timestamp }}</small>
-    </div>
-    {% endfor %}
-{% else %}
-    <p>No emails recorded yet.</p>
-{% endif %}
+<div id="tab-sessions" class="tab-content">
+    {% if sessions %}
+        {% for s in sessions %}
+        <div class="session-card">
+            <div class="session-header" onclick="toggleSession(this)">
+                <div>
+                    <strong>{{ s.label }}</strong>
+                    <p class="session-summary">{{ s.summary }}</p>
+                </div>
+                <div class="session-meta">
+                    <span class="tag">{{ s.total_mins }} mins</span>
+                    <small>{{ s.visit_count }} visits &mdash; {{ s.time_range }}</small>
+                    <span class="chevron">▼</span>
+                </div>
+            </div>
+            <div class="session-events" style="display:none">
+                {% for e in s.events %}
+                <div class="event-row">
+                    <span class="tag">{{ e.source }}</span>
+                    <span>{{ e.title }}</span>
+                    <small>{{ (e.duration_seconds // 60) }} mins</small>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p>No sessions yet — sync to get started.</p>
+    {% endif %}
+</div>
+
+<div id="tab-emails" class="tab-content" style="display:none">
+    {% if emails %}
+        {% for e in emails %}
+        <div class="card">
+            <strong>{{ e.subject }}</strong>
+            <p><small>From: {{ e.sender }}</small></p>
+            <p>{{ e.summary or e.snippet }}</p>
+            <small>{{ e.timestamp }}</small>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p>No emails recorded yet.</p>
+    {% endif %}
+</div>
 
 <hr>
 <button hx-post="/sync" hx-swap="none">Sync Now</button>
+
+<script>
+function switchTab(name) {
+    document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + name).style.display = 'block';
+    event.target.classList.add('active');
+}
+
+function toggleSession(header) {
+    const events = header.nextElementSibling;
+    const chevron = header.querySelector('.chevron');
+    const visible = events.style.display !== 'none';
+    events.style.display = visible ? 'none' : 'block';
+    chevron.textContent = visible ? '▼' : '▲';
+}
+</script>
 {% endblock %}
