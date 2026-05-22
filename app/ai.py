@@ -21,15 +21,20 @@ def chat_with_agent(messages: list[dict], activities: list[dict], emails: list[d
         "Be concise and conversational. Use the activity data below as your source of truth.\n\n"
         f"Activity data:\n{context}"
     )
-    contents = [{"role": "user", "parts": [{"text": system}]},
-                {"role": "model", "parts": [{"text": "Got it, I have your activity data. What would you like to know?"}]}]
+    history = [
+        {"role": "user", "parts": [{"text": system}]},
+        {"role": "model", "parts": [{"text": "Got it, I have your activity data. What would you like to know?"}]},
+    ]
     for msg in messages:
         role = "user" if msg["role"] == "user" else "model"
-        contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+        history.append({"role": role, "parts": [{"text": msg["content"]}]})
 
     try:
-        model = genai.GenerativeModel(MODEL)
-        response = model.generate_content(contents)
+        from google.genai import types
+        response = client.models.generate_content(
+            model=MODEL,
+            contents=history,
+        )
         return response.text.strip()
     except Exception as e:
         return f"Sorry, I ran into an error: {e}"

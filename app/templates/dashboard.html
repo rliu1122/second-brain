@@ -61,10 +61,10 @@
                     <small>{{ s.visit_count }} visits · {{ s.time_range }}</small>
                     <div style="display:flex; gap:6px; align-items:center;">
                         <button class="btn btn-sm" style="font-size:11px; padding:3px 8px;"
-                            onclick="event.stopPropagation(); createFocusFromSession('{{ s.label | replace("'", "\\'") }}', '{{ s.label.split()[0] if s.label else '🎯' }}')"
+                            onclick="event.stopPropagation(); createFocusFromSession({{ s.label | tojson }}, {{ (s.label.split()[0] if s.label else '🎯') | tojson }})"
                         >+ Focus</button>
                         <button class="btn btn-sm" style="font-size:11px; padding:3px 8px; color:var(--text-muted);"
-                            onclick="event.stopPropagation(); hideSession(this, '{{ s.session_id }}')"
+                            onclick="event.stopPropagation(); hideSession(this, {{ s.session_id | tojson }})"
                         >Hide</button>
                         <span class="chevron">▾</span>
                     </div>

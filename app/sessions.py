@@ -17,10 +17,7 @@ def get_sessions_today() -> list[dict]:
         """, (today,)).fetchall()
 
     events = [dict(r) for r in rows]
-    if not events:
-        return []
-
-    sessions = _group_by_category(events)
+    sessions = _group_by_category(events) if events else []
     for session in sessions:
         session_id = _session_id(session["events"], session["category"])
         session["session_id"] = session_id
@@ -55,6 +52,7 @@ def get_sessions_today() -> list[dict]:
         end_local = cs["end"].astimezone(LOCAL_TZ)
         sessions.append({
             "category": "ai_coding",
+            "session_id": cs["session_id"],
             "events": normalized_events,
             "total_mins": cs["duration_mins"],
             "visit_count": len(cs["messages"]),
