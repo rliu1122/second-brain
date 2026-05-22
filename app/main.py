@@ -5,7 +5,7 @@ from fastapi.templating import Jinja2Templates
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 
-from app.database import init_db, get_activities_today, get_emails_today, get_all_focus_sessions, create_focus_session, delete_focus_session, toggle_focus_session_completion
+from app.database import init_db, get_activities_today, get_emails_today, get_all_focus_sessions, create_focus_session, delete_focus_session, toggle_focus_session_completion, add_focus_session_note, delete_focus_session_note, complete_focus_session
 from app.sync import sync_all
 from app.ai import answer_question
 from app.sessions import get_sessions_today
@@ -45,10 +45,10 @@ def shutdown():
 
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, page: int = 1):
+async def dashboard(request: Request, page: int = 1, email_page: int = 1):
     page_size = 10
     activities, total = get_activities_today(page=page, page_size=page_size)
-    emails = get_emails_today()
+    emails, email_total = get_emails_today(page=email_page, page_size=page_size)
     sessions = get_sessions_today()
     total_pages = max(1, (total + page_size - 1) // page_size)
     try:
@@ -63,6 +63,8 @@ async def dashboard(request: Request, page: int = 1):
         "sessions": sessions,
         "calendar_events": calendar_events,
         "focus_sessions": get_all_focus_sessions(),
+        "email_page": email_page,
+        "email_total_pages": max(1, (email_total + page_size - 1) // page_size),
         "page": page,
         "total_pages": total_pages,
     })
@@ -71,7 +73,7 @@ async def dashboard(request: Request, page: int = 1):
 @app.post("/ask", response_class=HTMLResponse)
 async def ask(request: Request, question: str = Form(...)):
     activities, _ = get_activities_today(page=1, page_size=200)
-    emails = get_emails_today()
+    emails, _ = get_emails_today(page=1, page_size=200)
     answer = answer_question(question, activities, emails)
     return templates.TemplateResponse("query.html", {
         "request": request,
@@ -101,6 +103,43 @@ async def toggle_focus_session(request: Request, focus_session_id: int):
     return templates.TemplateResponse("focus_sessions.html", {"request": request, "focus_sessions": focus_sessions})
 
 
+@app.post("/chat")
+async def chat(request: Request):
+    from app.ai import chat_with_agent
+    body = await request.json()
+    messages = body.get("messages", [])
+    activities, _ = get_activities_today(page=1, page_size=200)
+    emails, _ = get_emails_today(page=1, page_size=200)
+    reply = chat_with_agent(messages, activities, emails)
+    return {"reply": reply}
+
+
+@app.post("/focus_sessions/{focus_session_id}/notes", response_class=HTMLResponse)
+async def add_note(request: Request, focus_session_id: int, note: str = Form(...)):
+    add_focus_session_note(focus_session_id, note)
+    return templates.TemplateResponse("focus_sessions.html", {"request": request, "focus_sessions": get_all_focus_sessions()})
+
+
+@app.delete("/focus_sessions/notes/{note_id}", response_class=HTMLResponse)
+async def remove_note(request: Request, note_id: int):
+    delete_focus_session_note(note_id)
+    return templates.TemplateResponse("focus_sessions.html", {"request": request, "focus_sessions": get_all_focus_sessions()})
+
+
+@app.post("/focus_sessions/{focus_session_id}/complete", response_class=HTMLResponse)
+async def mark_complete(request: Request, focus_session_id: int):
+    complete_focus_session(focus_session_id)
+    return templates.TemplateResponse("focus_sessions.html", {"request": request, "focus_sessions": get_all_focus_sessions()})
+
+
+@app.post("/hide-session")
+async def hide_session_route(request: Request):
+    from app.database import hide_session
+    body = await request.json()
+    hide_session(body.get("session_id"))
+    return {"status": "ok"}
+
+
 @app.post("/merge-sessions")
 async def merge_sessions(request: Request):
     from app.ai import summarize_merged_sessions
@@ -118,5 +157,6 @@ async def merge_sessions(request: Request):
 
 @app.post("/sync")
 async def manual_sync():
-    sync_all()
+    import threading
+    threading.Thread(target=sync_all, daemon=True).start()
     return {"status": "ok"}

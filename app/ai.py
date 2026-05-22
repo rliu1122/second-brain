@@ -13,6 +13,28 @@ def _generate(prompt: str) -> str:
     return response.text.strip()
 
 
+def chat_with_agent(messages: list[dict], activities: list[dict], emails: list[dict]) -> str:
+    context = _build_context(activities, emails)
+    system = (
+        "You are a personal AI assistant with access to the user's activity log for today. "
+        "Answer questions about what they did, learned, or worked on. "
+        "Be concise and conversational. Use the activity data below as your source of truth.\n\n"
+        f"Activity data:\n{context}"
+    )
+    contents = [{"role": "user", "parts": [{"text": system}]},
+                {"role": "model", "parts": [{"text": "Got it, I have your activity data. What would you like to know?"}]}]
+    for msg in messages:
+        role = "user" if msg["role"] == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+
+    try:
+        model = genai.GenerativeModel(MODEL)
+        response = model.generate_content(contents)
+        return response.text.strip()
+    except Exception as e:
+        return f"Sorry, I ran into an error: {e}"
+
+
 def answer_question(question: str, activities: list[dict], emails: list[dict]) -> str:
     context = _build_context(activities, emails)
     prompt = (
@@ -28,6 +50,32 @@ def answer_question(question: str, activities: list[dict], emails: list[dict]) -
         f"Activity data:\n{context}\n\nQuestion: {question}"
     )
     return _generate(prompt)
+
+
+def categorize_events(events: list[dict]) -> dict[str, str]:
+    """Returns a mapping of event index -> category for a batch of events."""
+    lines = []
+    for i, e in enumerate(events):
+        lines.append(f"{i}: url={e.get('url','')[:80]} title={e.get('title','')[:60]}")
+
+    prompt = (
+        "Categorize each browsing event into one of these categories:\n"
+        "coding_practice, coding_research, job_search, entertainment, "
+        "productivity, communication, reading, social, learning, shopping, other\n\n"
+        "Events:\n" + "\n".join(lines) + "\n\n"
+        "Reply with one line per event in format: <index>:<category>\n"
+        "Example:\n0:coding_practice\n1:job_search"
+    )
+    try:
+        text = _generate(prompt)
+        result = {}
+        for line in text.strip().splitlines():
+            if ":" in line:
+                idx, cat = line.split(":", 1)
+                result[idx.strip()] = cat.strip()
+        return result
+    except Exception:
+        return {}
 
 
 def summarize_session(events: list[dict]) -> tuple[str, str]:
@@ -61,6 +109,46 @@ def summarize_session(events: list[dict]) -> tuple[str, str]:
         return label or "🌐 Browsing", summary or ""
     except Exception:
         return "🌐 Browsing", ""
+
+
+def link_sessions_to_focus(focus_name: str, sessions: list[dict]) -> list[str]:
+    """Returns list of session categories that are related to the focus item."""
+    if not sessions:
+        return []
+    lines = [f"- [{s['category']}] {s['label']}: {s['summary']}" for s in sessions]
+    prompt = (
+        f"Focus item: \"{focus_name}\"\n\n"
+        f"Today's work sessions:\n" + "\n".join(lines) + "\n\n"
+        f"Which session categories are related to this focus item? "
+        f"Reply with a comma-separated list of category names only, or 'none' if none match.\n"
+        f"Example: coding_practice, job_search"
+    )
+    try:
+        text = _generate(prompt).strip().lower()
+        if text == "none" or not text:
+            return []
+        return [c.strip() for c in text.split(",") if c.strip()]
+    except Exception:
+        return []
+
+
+def summarize_focus_session(focus_name: str, links: list[dict], notes: list[dict]) -> str:
+    if not links:
+        return ""
+    link_lines = [f"- {l['date']}: {l['label']} ({l['total_mins']} mins)" for l in links]
+    note_lines = [f"- {n['note']}" for n in notes] if notes else []
+    total = sum(l["total_mins"] for l in links)
+    prompt = (
+        f"Write a 2-3 sentence progress summary for the focus item \"{focus_name}\".\n\n"
+        f"Work sessions (total: {total} mins across {len(set(l['date'] for l in links))} days):\n"
+        + "\n".join(link_lines)
+        + ("\n\nUser notes:\n" + "\n".join(note_lines) if note_lines else "")
+        + "\n\nBe specific about what was worked on, how much progress, and when last active."
+    )
+    try:
+        return _generate(prompt).strip()
+    except Exception:
+        return ""
 
 
 def summarize_merged_sessions(labels: list[str], summaries: list[str]) -> tuple[str, str]:

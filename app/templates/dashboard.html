@@ -1,70 +1,84 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>Today's Activity</h1>
 
-<form hx-post="/ask" hx-target="#answer" hx-swap="innerHTML" hx-indicator="#spinner" hx-on::after-request="document.getElementById('clear-btn').style.display='inline'">
-    <input type="text" name="question" placeholder="What did I work on today?" />
-    <button type="submit">Ask</button>
-    <span id="spinner" class="htmx-indicator"> ⏳ Thinking...</span>
+<!-- Ask bar -->
+<form hx-post="/ask" hx-target="#answer" hx-swap="innerHTML" hx-indicator="#spinner"
+      hx-on::after-request="document.getElementById('clear-btn').style.display='flex'">
+    <div class="ask-bar">
+        <input type="text" name="question" placeholder="Ask anything about your day…" autocomplete="off" />
+        <span id="spinner" class="htmx-indicator">⏳ Thinking…</span>
+        <button type="submit" class="btn btn-primary">Ask</button>
+    </div>
 </form>
 
 <div id="answer"></div>
-<button id="clear-btn" style="display:none; margin-top:8px; font-size:12px;" onclick="document.getElementById('answer').innerHTML=''; this.style.display='none'">✕ Clear</button>
-
-<hr>
-
-<div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('focus')">🎯 Focus Sessions</button>
-    <button class="tab-btn" onclick="switchTab('sessions')">🧩 Sessions</button>
-    <button class="tab-btn" onclick="switchTab('emails')">✉️ Emails</button>
-    <button class="tab-btn" onclick="switchTab('calendar')">📅 Calendar</button>
+<div id="clear-btn" style="display:none; justify-content:flex-end; margin-top:4px;">
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('answer').innerHTML=''; this.parentElement.style.display='none'">✕ Clear</button>
 </div>
 
+<!-- Tabs -->
+<div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('focus', this)">🎯 Focus</button>
+    <button class="tab-btn" onclick="switchTab('sessions', this)">🧩 Sessions</button>
+    <button class="tab-btn" onclick="switchTab('emails', this)">✉️ Emails</button>
+    <button class="tab-btn" onclick="switchTab('calendar', this)">📅 Calendar</button>
+</div>
+
+<!-- Focus Sessions tab -->
 <div id="tab-focus" class="tab-content">
     {% include "focus_sessions.html" %}
-
-    <hr style="margin: 20px 0">
-    <form hx-post="/focus_sessions" hx-target="#focus-sessions-list" hx-swap="outerHTML">
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <input type="text" name="emoji" value="🎯" style="width:40px; text-align:center; padding:6px;">
-            <input type="text" name="name" placeholder="Focus session name..." style="flex:1; min-width:200px;">
-            <input type="text" name="frequency" placeholder="Frequency (optional, e.g. daily)" style="width:180px;">
-            <button type="submit">+ Add</button>
-        </div>
-    </form>
+    <div class="add-form">
+        <form hx-post="/focus_sessions" hx-target="#focus-sessions-list" hx-swap="outerHTML">
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <input type="text" name="emoji" value="🎯" style="width:44px; text-align:center;">
+                <input type="text" name="name" placeholder="New focus session…" style="flex:1; min-width:180px;">
+                <input type="text" name="frequency" placeholder="Frequency (optional)" style="width:170px;">
+                <button type="submit" class="btn btn-primary btn-sm">+ Add</button>
+            </div>
+        </form>
+    </div>
 </div>
 
-<div id="tab-sessions" class="tab-content" style="display:none;">
-
-    <div style="margin-bottom: 12px; display: flex; gap: 8px;">
-        <button id="merge-toggle" onclick="toggleMergeMode()" style="font-size:13px; padding: 6px 14px;">⚡ Merge Sessions</button>
-        <button id="merge-confirm" onclick="confirmMerge()" style="display:none; font-size:13px; padding: 6px 14px; background:#333; color:white; border:none; border-radius:6px; cursor:pointer;">Merge Selected</button>
-        <button id="merge-cancel" onclick="cancelMerge()" style="display:none; font-size:13px; padding: 6px 14px;">Cancel</button>
+<!-- Sessions tab -->
+<div id="tab-sessions" class="tab-content" style="display:none">
+    <div class="merge-controls">
+        <button id="merge-toggle" class="btn btn-sm" onclick="toggleMergeMode()">⚡ Merge</button>
+        <button id="merge-confirm" class="btn btn-sm btn-primary" onclick="confirmMerge()" style="display:none">Merge Selected</button>
+        <button id="merge-cancel" class="btn btn-sm btn-ghost" onclick="cancelMerge()" style="display:none">Cancel</button>
     </div>
+
     {% if sessions %}
         {% for s in sessions %}
-        <div class="session-card" data-id="{{ loop.index }}" data-label="{{ s.label }}" data-summary="{{ s.summary }}" style="cursor: grab">
+        <div class="session-card" data-id="{{ s.category }}" data-label="{{ s.label }}" data-summary="{{ s.summary }}" style="cursor:grab">
             <div class="session-header" onclick="handleSessionClick(event, this)">
-                <div>
-                    <strong>{{ s.label }}</strong>
-                    <p class="session-summary">{{ s.summary }}</p>
+                <div style="flex:1; min-width:0">
+                    <div class="session-label">{{ s.label }}</div>
+                    <div class="session-summary">{{ s.summary }}</div>
                 </div>
                 <div class="session-meta">
-                    <span class="tag">{{ s.total_mins }} mins</span>
-                    <small>{{ s.visit_count }} visits &mdash; {{ s.time_range }}</small>
-                    <span class="chevron">▼</span>
+                    <span class="tag">{{ s.total_mins }} min</span>
+                    <small>{{ s.visit_count }} visits · {{ s.time_range }}</small>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <button class="btn btn-sm" style="font-size:11px; padding:3px 8px;"
+                            onclick="event.stopPropagation(); createFocusFromSession('{{ s.label | replace("'", "\\'") }}', '{{ s.label.split()[0] if s.label else '🎯' }}')"
+                        >+ Focus</button>
+                        <button class="btn btn-sm" style="font-size:11px; padding:3px 8px; color:var(--text-muted);"
+                            onclick="event.stopPropagation(); hideSession(this, '{{ s.session_id }}')"
+                        >Hide</button>
+                        <span class="chevron">▾</span>
+                    </div>
                 </div>
             </div>
             <div class="session-events" style="display:none">
                 {% if s.category == 'ai_coding' %}
-                    <p style="padding: 8px 0; color: #444;">{{ s.summary }}</p>
+                    <p style="font-size:13px; color:#555; margin:0;">{{ s.summary }}</p>
                 {% else %}
                     {% for e in s.events %}
                     <div class="event-row">
                         <span class="tag">{{ e.source }}</span>
                         <span>{{ e.title }}</span>
-                        <small>{{ (e.duration_seconds // 60) }} mins</small>
+                        <small>{{ (e.duration_seconds // 60) }} min</small>
                     </div>
                     {% endfor %}
                 {% endif %}
@@ -72,90 +86,107 @@
         </div>
         {% endfor %}
     {% else %}
-        <p>No sessions yet — sync to get started.</p>
+        <div class="empty">No sessions yet — click Sync to get started.</div>
     {% endif %}
 </div>
 
+<!-- Emails tab -->
 <div id="tab-emails" class="tab-content" style="display:none">
     {% if emails %}
         {% for e in emails %}
         <div class="card">
             <strong>{{ e.subject }}</strong>
-            <p><small>From: {{ e.sender }}</small></p>
             <p>{{ e.summary or e.snippet }}</p>
-            <small>{{ e.timestamp }}</small>
+            <small>{{ e.sender }} · {{ e.timestamp }}</small>
         </div>
         {% endfor %}
+        <div class="pagination">
+            {% if email_page > 1 %}
+                <a href="/?email_page={{ email_page - 1 }}#emails">← Prev</a>
+            {% endif %}
+            <span style="font-size:13px; color:var(--text-muted)">Page {{ email_page }} of {{ email_total_pages }}</span>
+            {% if email_page < email_total_pages %}
+                <a href="/?email_page={{ email_page + 1 }}#emails">Next →</a>
+            {% endif %}
+        </div>
     {% else %}
-        <p>No emails recorded yet.</p>
+        <div class="empty">No emails recorded yet.</div>
     {% endif %}
 </div>
 
+<!-- Calendar tab -->
 <div id="tab-calendar" class="tab-content" style="display:none">
     {% if calendar_events %}
         {% for e in calendar_events %}
         <div class="card">
             <strong>{{ e.title }}</strong>
-            <p>
-                <small>🕐 {{ e.start | format_time }} – {{ e.end | format_time }}</small>
-                {% if e.location %}<br><small>📍 {{ e.location }}</small>{% endif %}
-                {% if e.meet_link %}<br><small><a href="{{ e.meet_link }}" target="_blank">Join Meeting</a></small>{% endif %}
-            </p>
-            {% if e.attendees %}
-            <small>👥 {{ e.attendees | join(', ') }}</small>
-            {% endif %}
+            <p>🕐 {{ e.start | format_time }} – {{ e.end | format_time }}
+            {% if e.location %} · 📍 {{ e.location }}{% endif %}</p>
+            {% if e.meet_link %}<a href="{{ e.meet_link }}" target="_blank">Join Meeting →</a>{% endif %}
+            {% if e.attendees %}<p>👥 {{ e.attendees | join(', ') }}</p>{% endif %}
         </div>
         {% endfor %}
     {% else %}
-        <p>No events today.</p>
+        <div class="empty">No events today.</div>
     {% endif %}
 </div>
 
-<hr>
-<button hx-post="/sync" hx-swap="none" hx-on::after-request="window.location.reload()">Sync Now</button>
+<!-- Footer -->
+<div class="footer-bar">
+    <button class="btn" id="sync-btn" hx-post="/sync" hx-swap="none" hx-on::after-request="startSyncPolling()">↺ Sync Now</button>
+<span id="sync-status" style="font-size:13px; color:#6b7280;"></span>
+</div>
 
 <script>
-function switchTab(name) {
+function switchTab(name, btn) {
     document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
     document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
     document.getElementById('tab-' + name).style.display = 'block';
-    event.target.classList.add('active');
+    btn.classList.add('active');
+    location.hash = name;
 }
+
+function restoreTab() {
+    const hash = location.hash.replace('#', '');
+    const validTabs = ['focus', 'sessions', 'emails', 'calendar'];
+    if (validTabs.includes(hash)) {
+        const idx = validTabs.indexOf(hash);
+        const btn = document.querySelectorAll('.tab-btn')[idx];
+        if (btn) switchTab(hash, btn);
+    }
+}
+
 
 function toggleSession(header) {
     const events = header.nextElementSibling;
     const chevron = header.querySelector('.chevron');
     const visible = events.style.display !== 'none';
     events.style.display = visible ? 'none' : 'block';
-    chevron.textContent = visible ? '▼' : '▲';
+    chevron.textContent = visible ? '▾' : '▴';
 }
 
-// Merge sessions
-const MERGE_KEY = 'merged-sessions';
+// Merge
 let mergeMode = false;
-let mergeTarget = null; // first selected = target (B)
+let mergeTarget = null;
 
 function toggleMergeMode() {
     mergeMode = !mergeMode;
-    document.getElementById('merge-toggle').textContent = mergeMode ? '✕ Exit Merge' : '⚡ Merge Sessions';
-    document.getElementById('merge-confirm').style.display = mergeMode ? 'inline' : 'none';
-    document.getElementById('merge-cancel').style.display = mergeMode ? 'inline' : 'none';
+    document.getElementById('merge-toggle').textContent = mergeMode ? '✕ Exit Merge' : '⚡ Merge';
+    document.getElementById('merge-confirm').style.display = mergeMode ? 'inline-flex' : 'none';
+    document.getElementById('merge-cancel').style.display = mergeMode ? 'inline-flex' : 'none';
     if (!mergeMode) clearMergeSelection();
 }
 
 function cancelMerge() {
-    mergeMode = false;
-    mergeTarget = null;
-    document.getElementById('merge-toggle').textContent = '⚡ Merge Sessions';
+    mergeMode = false; mergeTarget = null;
+    document.getElementById('merge-toggle').textContent = '⚡ Merge';
     document.getElementById('merge-confirm').style.display = 'none';
     document.getElementById('merge-cancel').style.display = 'none';
     clearMergeSelection();
 }
 
 function clearMergeSelection() {
-    document.querySelectorAll('.session-card.selected, .session-card.merge-target').forEach(el => {
-        el.classList.remove('selected', 'merge-target');
-    });
+    document.querySelectorAll('.session-card.selected, .session-card.merge-target').forEach(el => el.classList.remove('selected', 'merge-target'));
     mergeTarget = null;
 }
 
@@ -166,7 +197,7 @@ function handleSessionClick(event, header) {
         if (!mergeTarget) {
             mergeTarget = card;
             card.classList.add('merge-target');
-            card.querySelector('strong').insertAdjacentHTML('afterend', ' <span class="merge-badge">TARGET</span>');
+            card.querySelector('.session-label').insertAdjacentHTML('afterend', '<span class="merge-badge">TARGET</span>');
         } else if (card !== mergeTarget) {
             card.classList.toggle('selected');
         }
@@ -176,77 +207,31 @@ function handleSessionClick(event, header) {
 }
 
 async function confirmMerge() {
-    if (!mergeTarget) { alert('Click a session first to set it as the merge target.'); return; }
+    if (!mergeTarget) { alert('Click a session to set it as target.'); return; }
     const sources = [...document.querySelectorAll('.session-card.selected')];
-    if (sources.length < 1) { alert('Select at least one session to merge into the target.'); return; }
-
+    if (!sources.length) { alert('Select at least one session to merge in.'); return; }
     const allCards = [mergeTarget, ...sources];
-    const labels = allCards.map(el => el.dataset.label);
-    const summaries = allCards.map(el => el.dataset.summary);
-
-    // Show loading state
-    mergeTarget.querySelector('strong').textContent = '⏳ Regenerating...';
-
+    mergeTarget.querySelector('.session-label').textContent = '⏳ Regenerating…';
     const res = await fetch('/merge-sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            labels,
-            summaries,
-            target_id: mergeTarget.dataset.id,
-            merged_ids: sources.map(el => el.dataset.id),
-        }),
+        body: JSON.stringify({ labels: allCards.map(el => el.dataset.label), summaries: allCards.map(el => el.dataset.summary), target_id: mergeTarget.dataset.id, merged_ids: sources.map(el => el.dataset.id) }),
     });
     const { label, summary } = await res.json();
-
-    // Update target card
     const badge = mergeTarget.querySelector('.merge-badge');
     if (badge) badge.remove();
-    mergeTarget.querySelector('strong').textContent = label;
+    mergeTarget.querySelector('.session-label').textContent = label;
     mergeTarget.querySelector('.session-summary').textContent = summary;
-    mergeTarget.dataset.label = label;
-    mergeTarget.dataset.summary = summary;
-
-    // Remove merged source cards
+    mergeTarget.dataset.label = label; mergeTarget.dataset.summary = summary;
     sources.forEach(el => el.remove());
-
-    saveOrder();
-    cancelMerge();
+    saveOrder(); cancelMerge();
 }
 
-function saveMerges() {
-    const cards = [...document.querySelectorAll('.session-card')];
-    const state = cards.map(el => ({ id: el.dataset.id, label: el.dataset.label, summary: el.dataset.summary }));
-    localStorage.setItem(MERGE_KEY, JSON.stringify(state));
-}
-
-function restoreMerges() {
-    const saved = localStorage.getItem(MERGE_KEY);
-    if (!saved) return;
-    const state = JSON.parse(saved);
-    const cards = Object.fromEntries([...document.querySelectorAll('.session-card')].map(el => [el.dataset.id, el]));
-    const presentIds = new Set(state.map(s => s.id));
-
-    state.forEach(({ id, label, summary }) => {
-        const card = cards[id];
-        if (!card) return;
-        card.querySelector('strong').textContent = label;
-        card.querySelector('.session-summary').textContent = summary;
-        card.dataset.label = label;
-        card.dataset.summary = summary;
-    });
-
-    Object.entries(cards).forEach(([id, card]) => {
-        if (!presentIds.has(id)) card.remove();
-    });
-}
-
-// Drag and drop ordering with localStorage persistence
+// Drag & drop
 const STORAGE_KEY = 'session-order';
 
 function saveOrder() {
-    const ids = [...document.querySelectorAll('.session-card')].map(el => el.dataset.id);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([...document.querySelectorAll('.session-card')].map(el => el.dataset.id)));
 }
 
 function restoreOrder() {
@@ -258,14 +243,43 @@ function restoreOrder() {
     ids.forEach(id => { if (cards[id]) container.appendChild(cards[id]); });
 }
 
+async function hideSession(btn, sessionId) {
+    await fetch('/hide-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId }),
+    });
+    btn.closest('.session-card').remove();
+}
+
+async function createFocusFromSession(label, emoji) {
+    const name = label.replace(/^[\p{Emoji}\s]+/u, '').trim() || label;
+    const form = new FormData();
+    form.append('name', name);
+    form.append('emoji', emoji);
+    form.append('frequency', '');
+    const res = await fetch('/focus_sessions', { method: 'POST', body: form });
+    const html = await res.text();
+    document.getElementById('focus-sessions-list').outerHTML = html;
+    // Switch to focus tab
+    document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-focus').style.display = 'block';
+    document.querySelector('.tab-btn').classList.add('active');
+}
+
+function startSyncPolling() {
+    const status = document.getElementById('sync-status');
+    status.textContent = '⏳ Syncing…';
+    // Reload after 3s to show fresh data, then again after 15s for summaries
+    setTimeout(() => { window.location.reload(); }, 3000);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    const container = document.getElementById('tab-sessions');
+    restoreTab();
     restoreOrder();
-    Sortable.create(container, {
-        animation: 150,
-        handle: '.session-header',
-        ghostClass: 'sortable-ghost',
-        onEnd: saveOrder,
+    Sortable.create(document.getElementById('tab-sessions'), {
+        animation: 150, handle: '.session-header', ghostClass: 'sortable-ghost', onEnd: saveOrder,
     });
 });
 </script>

@@ -2,7 +2,7 @@ from datetime import datetime
 from collections import defaultdict
 import hashlib
 import json
-from app.database import get_connection, format_timestamp, LOCAL_TZ, get_cached_session, cache_session, get_todays_merges
+from app.database import get_connection, format_timestamp, LOCAL_TZ, get_cached_session, cache_session, get_todays_merges, hide_session, get_hidden_sessions as _get_hidden_sessions
 from app.ai import summarize_session, summarize_claude_session
 from app.connectors.claude_code import get_todays_sessions as get_claude_sessions
 
@@ -22,14 +22,15 @@ def get_sessions_today() -> list[dict]:
 
     sessions = _group_by_category(events)
     for session in sessions:
-        session_id = _session_id(session["events"])
+        session_id = _session_id(session["events"], session["category"])
+        session["session_id"] = session_id
         cached = get_cached_session(session_id)
         if cached:
             session["label"], session["summary"] = cached
         else:
-            label, summary = summarize_session(session["events"])
-            session["label"], session["summary"] = label, summary
-            cache_session(session_id, label, summary)
+            session["label"] = "⏳ Processing…"
+            session["summary"] = "Summary will appear after next sync."
+            session["pending"] = True
 
     # Add Claude Code sessions
     for cs in get_claude_sessions():
@@ -37,8 +38,7 @@ def get_sessions_today() -> list[dict]:
         if cached:
             label, summary = cached
         else:
-            label, summary = summarize_claude_session(cs["messages"], cs["duration_mins"])
-            cache_session(cs["session_id"], label, summary)
+            label, summary = "⏳ Processing…", "Summary will appear after next sync."
         # Normalize messages to match browser event structure for the template
         normalized_events = [
             {
@@ -63,7 +63,14 @@ def get_sessions_today() -> list[dict]:
             "summary": summary,
         })
 
+    # Assign stable IDs based on category before applying merges
+    for i, s in enumerate(sessions):
+        s["stable_id"] = s["category"]
+
     sessions = _apply_merges(sessions)
+    # Filter out trivial sessions and manually hidden ones
+    hidden = _get_hidden_sessions()
+    sessions = [s for s in sessions if s["total_mins"] >= 2 and s.get("session_id") not in hidden]
     return sorted(sessions, key=lambda s: s["total_mins"], reverse=True)
 
 
@@ -73,28 +80,25 @@ def _apply_merges(sessions: list[dict]) -> list[dict]:
         return sessions
 
     import json as _json
-    session_map = {s["category"] + str(i): s for i, s in enumerate(sessions)}
-
-    # Build id map by position (matching how frontend assigns data-id)
-    id_map = {str(i + 1): s for i, s in enumerate(sessions)}
+    # Use category as stable key
+    cat_map = {s["category"]: s for s in sessions}
     merged_away = set()
 
     for merge in merges:
-        target_id = merge["target_id"]
-        merged_ids = _json.loads(merge["merged_ids"])
-        target = id_map.get(target_id)
+        target_cat = merge["target_id"]
+        merged_cats = _json.loads(merge["merged_ids"])
+        target = cat_map.get(target_cat)
         if not target:
             continue
         target["label"] = merge["label"]
         target["summary"] = merge["summary"]
-        # Add time from merged sessions
-        for mid in merged_ids:
-            src = id_map.get(mid)
+        for mcat in merged_cats:
+            src = cat_map.get(mcat)
             if src:
                 target["total_mins"] += src.get("total_mins", 0)
-                merged_away.add(mid)
+                merged_away.add(mcat)
 
-    return [s for i, s in enumerate(sessions) if str(i + 1) not in merged_away]
+    return [s for s in sessions if s["category"] not in merged_away]
 
 
 def _group_by_category(events: list[dict]) -> list[dict]:
@@ -121,30 +125,19 @@ def _group_by_category(events: list[dict]) -> list[dict]:
 
 
 def _infer_category(event: dict) -> str:
-    source = (event.get("source") or "").lower()
+    # Use AI category from DB if available
+    if event.get("ai_category"):
+        return event["ai_category"]
+    # Fall back to domain-based grouping
     url = (event.get("url") or "").lower()
-    title = (event.get("title") or "").lower()
-
-    if any(x in url for x in ["leetcode", "hackerrank", "codewars", "neetcode"]):
-        return "coding_practice"
-    if any(x in url for x in ["github", "stackoverflow", "docs.", "developer."]):
-        return "coding_research"
-    if any(x in url for x in ["linkedin", "greenhouse", "lever", "ashby", "glassdoor", "wellfound"]):
-        return "job_search"
-    if any(x in url for x in ["youtube", "netflix", "twitch", "spotify"]):
-        return "entertainment"
-    if any(x in url for x in ["notion", "docs.google", "confluence", "figma"]):
-        return "productivity"
-    if any(x in url for x in ["twitter", "reddit", "hackernews", "news"]):
-        return "reading"
-    if event.get("category") not in ("other", "browsing", None):
-        return event["category"]
-    return "other"
+    from urllib.parse import urlparse
+    domain = urlparse(url).netloc.replace("www.", "")
+    return f"browsing:{domain}" if domain else "other"
 
 
-def _session_id(events: list[dict]) -> str:
-    key = json.dumps([e.get("id") for e in events], sort_keys=True)
-    return hashlib.md5(key.encode()).hexdigest()
+def _session_id(events: list[dict], category: str = "") -> str:
+    today = datetime.now(LOCAL_TZ).strftime("%Y-%m-%d")
+    return hashlib.md5(f"{today}:{category}".encode()).hexdigest()
 
 
 def _format_range(timestamps: list) -> str:

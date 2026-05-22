@@ -4,56 +4,598 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Second Brain</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <style>
-        body { font-family: sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
-        nav { margin-bottom: 30px; }
-        nav a { margin-right: 20px; text-decoration: none; color: #333; }
-        .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
-        .tag { background: #eee; border-radius: 4px; padding: 2px 8px; font-size: 12px; }
-        input[type=text] { width: 70%; padding: 8px; font-size: 16px; }
-        button { padding: 8px 16px; font-size: 16px; cursor: pointer; }
-        .answer { background: #f9f9f9; border-left: 4px solid #555; padding: 16px; margin-top: 16px; }
-        .answer-body { margin-top: 12px; }
-        .answer-section { font-weight: bold; margin: 12px 0 4px; }
-        .answer-bullet { margin: 2px 0 2px 16px; color: #333; }
-        .pagination { margin-top: 16px; display: flex; gap: 16px; align-items: center; }
-        .pagination a { text-decoration: none; color: #333; font-weight: bold; }
-        .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
-        .tab-btn { padding: 8px 20px; border: 1px solid #ddd; border-radius: 6px; background: #f5f5f5; cursor: pointer; font-size: 14px; }
-        .tab-btn.active { background: #333; color: white; border-color: #333; }
-        .session-card { border: 1px solid #ddd; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
-        .session-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 14px 16px; cursor: pointer; background: #fafafa; }
-        .session-header:hover { background: #f0f0f0; }
-        .session-summary { color: #555; font-size: 13px; margin: 4px 0 0; }
-        .session-meta { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-        .session-events { padding: 8px 16px 12px; border-top: 1px solid #eee; }
-        .event-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 13px; border-bottom: 1px solid #f5f5f5; }
-        .event-row span { flex: 1; }
-        .event-row small { color: #888; white-space: nowrap; }
-        .chevron { font-size: 11px; color: #888; }
-        .sortable-ghost { opacity: 0.4; background: #e8f0fe; }
-        .goal-card { display: flex; justify-content: space-between; align-items: center; border: 1px solid #ddd; border-radius: 8px; padding: 12px 16px; margin-bottom: 10px; }
-        .goal-card.done { background: #f0fff4; border-color: #86efac; }
+        *, *::before, *::after { box-sizing: border-box; }
+
+        :root {
+            --bg: #f8f9fb;
+            --surface: #ffffff;
+            --border: #e5e7eb;
+            --border-light: #f0f2f5;
+            --text: #111827;
+            --text-muted: #6b7280;
+            --text-light: #9ca3af;
+            --accent: #4f46e5;
+            --accent-light: #eef2ff;
+            --green: #16a34a;
+            --green-light: #f0fdf4;
+            --green-border: #86efac;
+            --orange: #f97316;
+            --radius: 10px;
+            --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .app-header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 0 32px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .app-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .app-title span { color: var(--accent); }
+
+        .header-date {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .main-container {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 28px 24px;
+        }
+
+        /* Ask bar */
+        .ask-bar {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px 16px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            box-shadow: var(--shadow);
+            margin-bottom: 8px;
+        }
+
+        .ask-bar input {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-size: 14px;
+            font-family: inherit;
+            color: var(--text);
+            background: transparent;
+        }
+
+        .ask-bar input::placeholder { color: var(--text-light); }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 14px;
+            font-size: 13px;
+            font-weight: 500;
+            font-family: inherit;
+            border-radius: 7px;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            transition: background 0.15s, border-color 0.15s;
+        }
+
+        .btn:hover { background: var(--bg); }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .btn-primary:hover { background: #4338ca; border-color: #4338ca; }
+
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+        .btn-ghost {
+            background: transparent;
+            border-color: transparent;
+            color: var(--text-muted);
+        }
+
+        .btn-ghost:hover { background: var(--bg); color: var(--text); border-color: var(--border); }
+
+        /* Answer */
+        .answer-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-top: 10px;
+            box-shadow: var(--shadow);
+        }
+
+        .answer-question { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+        .answer-section { font-weight: 600; font-size: 14px; margin: 14px 0 4px; }
+        .answer-bullet { font-size: 14px; color: var(--text); margin: 3px 0 3px 16px; line-height: 1.5; }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 2px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 4px;
+            margin: 20px 0 16px;
+            box-shadow: var(--shadow);
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: 500;
+            font-family: inherit;
+            border: none;
+            border-radius: 7px;
+            cursor: pointer;
+            background: transparent;
+            color: var(--text-muted);
+            transition: all 0.15s;
+        }
+
+        .tab-btn:hover { background: var(--bg); color: var(--text); }
+        .tab-btn.active { background: var(--accent); color: white; }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-bottom: 10px;
+            box-shadow: var(--shadow);
+            transition: box-shadow 0.15s;
+        }
+
+        .card:hover { box-shadow: var(--shadow-md); }
+        .card strong { font-size: 14px; font-weight: 600; display: block; margin-bottom: 4px; }
+        .card p { font-size: 13px; color: var(--text-muted); margin: 4px 0; }
+        .card small { font-size: 12px; color: var(--text-light); }
+        .card a { color: var(--accent); text-decoration: none; }
+        .card a:hover { text-decoration: underline; }
+
+        .tag {
+            display: inline-block;
+            background: var(--accent-light);
+            color: var(--accent);
+            border-radius: 5px;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        /* Session cards */
+        .session-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin-bottom: 10px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            transition: box-shadow 0.15s;
+        }
+
+        .session-card:hover { box-shadow: var(--shadow-md); }
+
+        .session-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 14px 16px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .session-header:hover { background: var(--bg); }
+
+        .session-label { font-size: 14px; font-weight: 600; }
+        .session-summary { color: var(--text-muted); font-size: 13px; margin: 3px 0 0; line-height: 1.4; }
+
+        .session-meta {
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+            flex-shrink: 0;
+            margin-left: 16px;
+        }
+
+        .session-meta small { font-size: 11px; color: var(--text-light); white-space: nowrap; }
+        .chevron { font-size: 10px; color: var(--text-light); }
+
+        .session-events {
+            padding: 8px 16px 14px;
+            border-top: 1px solid var(--border-light);
+            background: var(--bg);
+        }
+
+        .event-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 5px 0;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .event-row:last-child { border-bottom: none; }
+        .event-row span { flex: 1; color: var(--text); }
+        .event-row small { color: var(--text-light); white-space: nowrap; }
+
+        .session-card.selected { border: 2px solid var(--orange); background: #fff8ed; }
+        .session-card.merge-target { border: 2px solid var(--accent); background: var(--accent-light); }
+        .merge-badge { font-size: 10px; background: var(--accent); color: white; padding: 1px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle; }
+        .sortable-ghost { opacity: 0.35; background: var(--accent-light); }
+
+        /* Focus session cards */
+        .goal-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow);
+            transition: box-shadow 0.15s;
+        }
+
+        .goal-card:hover { box-shadow: var(--shadow-md); }
+        .goal-card.done { background: var(--green-light); border-color: var(--green-border); }
         .goal-info { display: flex; align-items: center; gap: 12px; }
-        .goal-emoji { font-size: 22px; }
-        .goal-actions { display: flex; gap: 8px; align-items: center; }
-        .complete-btn { font-size: 20px; background: none; border: none; cursor: pointer; padding: 0; }
-        .delete-btn { font-size: 12px; background: none; border: none; cursor: pointer; color: #aaa; padding: 4px; }
-        .delete-btn:hover { color: #e00; }
-        .streak { font-size: 12px; color: #f97316; margin-left: 8px; }
-        .session-card.selected { border: 2px solid #888; background: #fff8e1; }
-        .session-card.merge-target { border: 2px solid #333; background: #f0f4ff; }
-        .merge-badge { font-size: 10px; background: #333; color: white; padding: 1px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle; }
-        .htmx-indicator { display: none; }
+        .goal-emoji { font-size: 22px; line-height: 1; }
+        .goal-info strong { font-size: 14px; font-weight: 600; display: block; }
+        .goal-info .meta { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+        .goal-actions { display: flex; gap: 6px; align-items: center; }
+        .complete-btn { font-size: 22px; background: none; border: none; cursor: pointer; padding: 0; line-height: 1; }
+        .delete-btn { background: none; border: none; cursor: pointer; color: var(--text-light); font-size: 14px; padding: 4px; border-radius: 4px; }
+        .delete-btn:hover { color: #ef4444; background: #fef2f2; }
+        .streak { font-size: 12px; color: var(--orange); font-weight: 500; }
+        .focus-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; box-shadow: var(--shadow); }
+        .focus-card.done { border-color: var(--green-border); }
+        .focus-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; cursor: pointer; }
+        .focus-header:hover { background: var(--bg); }
+        .focus-title-row { display: flex; align-items: center; gap: 12px; }
+        .focus-title-row strong { font-size: 14px; font-weight: 600; display: block; }
+        .focus-meta { display: flex; align-items: center; gap: 8px; margin-top: 3px; flex-wrap: wrap; }
+        .focus-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .focus-body { padding: 0 16px 16px; border-top: 1px solid var(--border-light); background: var(--bg); }
+        .focus-summary { font-size: 13px; color: var(--text); line-height: 1.6; padding: 12px 0 0; }
+        .focus-summary p { margin: 0; }
+        .focus-section-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 12px; margin-bottom: 6px; }
+        .note-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border-light); }
+        .note-row:last-of-type { border-bottom: none; }
+
+        /* Add focus session form */
+        .add-form {
+            background: var(--surface);
+            border: 1px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 14px 16px;
+            margin-top: 12px;
+        }
+
+        .add-form input {
+            font-family: inherit;
+            font-size: 13px;
+            padding: 7px 10px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            outline: none;
+            color: var(--text);
+        }
+
+        .add-form input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,70,229,0.08); }
+
+        /* Pagination */
+        .pagination { margin-top: 16px; display: flex; gap: 8px; align-items: center; }
+        .pagination a { font-size: 13px; font-weight: 500; text-decoration: none; color: var(--accent); }
+
+        /* Sync button area */
+        .footer-bar {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Spinner */
+        .htmx-indicator { display: none; font-size: 13px; color: var(--text-muted); }
         .htmx-request.htmx-indicator { display: inline; }
+
+        /* Empty states */
+        .empty { color: var(--text-muted); font-size: 14px; padding: 24px 0; text-align: center; }
+
+        /* Merge controls */
+        .merge-controls { display: flex; gap: 8px; margin-bottom: 12px; }
+
+        /* Chat widget */
+        #chat-widget {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+        }
+
+        #chat-toggle {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            border: none;
+            font-size: 22px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(79,70,229,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.15s;
+        }
+
+        #chat-toggle:hover { transform: scale(1.05); }
+
+        #chat-panel {
+            display: none;
+            flex-direction: column;
+            width: 340px;
+            height: 480px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            box-shadow: var(--shadow-md);
+            overflow: hidden;
+        }
+
+        #chat-panel.open { display: flex; }
+
+        .chat-header {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg);
+        }
+
+        #chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .chat-bubble {
+            max-width: 85%;
+            padding: 9px 12px;
+            border-radius: 12px;
+            font-size: 13px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+
+        .chat-bubble.user {
+            background: var(--accent);
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .chat-bubble.agent {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+
+        .chat-bubble.typing { color: var(--text-muted); font-style: italic; }
+
+        .chat-input-row {
+            padding: 10px 12px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 8px;
+        }
+
+        #chat-input {
+            flex: 1;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 13px;
+            font-family: inherit;
+            outline: none;
+            resize: none;
+            height: 38px;
+        }
+
+        #chat-input:focus { border-color: var(--accent); }
+
+        /* Selection popover */
+        #selection-popover {
+            position: fixed;
+            display: none;
+            z-index: 2000;
+            background: var(--text);
+            color: white;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            box-shadow: var(--shadow-md);
+            white-space: nowrap;
+        }
+
+        #selection-popover:hover { background: #1f2937; }
     </style>
 </head>
 <body>
-    <nav>
-        <a href="/"><strong>Second Brain</strong></a>
-    </nav>
-    {% block content %}{% endblock %}
+    <header class="app-header">
+        <a href="/" class="app-title">🧠 <span>Second</span>Brain</a>
+        <span class="header-date" id="header-date"></span>
+    </header>
+    <div class="main-container">
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Selection popover -->
+    <div id="selection-popover">🤖 Ask Agent</div>
+
+    <!-- Chat widget -->
+    <div id="chat-widget">
+        <div id="chat-panel">
+            <div class="chat-header">
+                <span>🤖 Activity Agent</span>
+                <button onclick="toggleChat()" style="background:none;border:none;cursor:pointer;font-size:16px;color:#6b7280;">✕</button>
+            </div>
+            <div id="chat-messages">
+                <div class="chat-bubble agent">Hi! Ask me anything about your activity today.</div>
+            </div>
+            <div class="chat-input-row">
+                <textarea id="chat-input" placeholder="Ask something…" rows="1"
+                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
+                <button class="btn btn-primary btn-sm" onclick="sendChat()">↑</button>
+            </div>
+        </div>
+        <button id="chat-toggle" onclick="toggleChat()">🤖</button>
+    </div>
+
+    <script>
+        const d = new Date();
+        document.getElementById('header-date').textContent = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+        // Chat
+        let chatHistory = [];
+        let chatOpen = false;
+
+        function toggleChat() {
+            chatOpen = !chatOpen;
+            document.getElementById('chat-panel').classList.toggle('open', chatOpen);
+            if (chatOpen) document.getElementById('chat-input').focus();
+        }
+
+        function appendBubble(text, role) {
+            const div = document.createElement('div');
+            div.className = `chat-bubble ${role}`;
+            div.textContent = text;
+            const container = document.getElementById('chat-messages');
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            return div;
+        }
+
+        async function sendChat(prefill) {
+            const input = document.getElementById('chat-input');
+            const text = prefill || input.value.trim();
+            if (!text) return;
+            input.value = '';
+
+            if (!chatOpen) toggleChat();
+
+            appendBubble(text, 'user');
+            chatHistory.push({ role: 'user', content: text });
+
+            const typing = appendBubble('Thinking…', 'agent typing');
+
+            const res = await fetch('/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: chatHistory }),
+            });
+            const { reply } = await res.json();
+            typing.remove();
+
+            appendBubble(reply, 'agent');
+            chatHistory.push({ role: 'agent', content: reply });
+        }
+
+        // Text selection popover
+        const popover = document.getElementById('selection-popover');
+
+        document.addEventListener('mouseup', (e) => {
+            if (e.target.closest('#chat-widget') || e.target.closest('#selection-popover')) return;
+            setTimeout(() => {
+                const sel = window.getSelection();
+                const text = sel ? sel.toString().trim() : '';
+                if (text.length > 5) {
+                    const range = sel.getRangeAt(0).getBoundingClientRect();
+                    popover.style.display = 'block';
+                    popover.style.top = (window.scrollY + range.top - 40) + 'px';
+                    popover.style.left = (window.scrollX + range.left + range.width / 2 - popover.offsetWidth / 2) + 'px';
+                    popover._text = text;
+                } else {
+                    popover.style.display = 'none';
+                }
+            }, 10);
+        });
+
+        popover.addEventListener('click', () => {
+            const text = popover._text;
+            popover.style.display = 'none';
+            window.getSelection().removeAllRanges();
+            sendChat(`About this: "${text}"`);
+        });
+
+        document.addEventListener('mousedown', (e) => {
+            if (e.target !== popover) popover.style.display = 'none';
+        });
+    </script>
 </body>
 </html>

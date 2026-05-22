@@ -38,6 +38,7 @@ def init_db():
                 timestamp TEXT NOT NULL,
                 source TEXT NOT NULL,
                 category TEXT NOT NULL,
+                ai_category TEXT,
                 url TEXT,
                 title TEXT,
                 duration_seconds INTEGER,
@@ -73,6 +74,10 @@ def init_db():
                 name TEXT NOT NULL,
                 emoji TEXT DEFAULT '🎯',
                 frequency TEXT,
+                summary TEXT,
+                total_mins INTEGER DEFAULT 0,
+                last_active_date TEXT,
+                completed_at TEXT,
                 created_at TEXT DEFAULT (datetime('now'))
             )
         """)
@@ -83,6 +88,34 @@ def init_db():
                 date TEXT NOT NULL,
                 UNIQUE(focus_session_id, date),
                 FOREIGN KEY(focus_session_id) REFERENCES focus_sessions(id)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS focus_session_links (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                focus_session_id INTEGER NOT NULL,
+                session_category TEXT NOT NULL,
+                date TEXT NOT NULL,
+                total_mins INTEGER DEFAULT 0,
+                label TEXT,
+                UNIQUE(focus_session_id, session_category, date),
+                FOREIGN KEY(focus_session_id) REFERENCES focus_sessions(id)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS focus_session_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                focus_session_id INTEGER NOT NULL,
+                note TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY(focus_session_id) REFERENCES focus_sessions(id)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS hidden_sessions (
+                session_id TEXT NOT NULL,
+                date TEXT NOT NULL,
+                PRIMARY KEY (session_id, date)
             )
         """)
         conn.execute("""
@@ -121,20 +154,81 @@ def insert_email(message_id: str, timestamp: str, sender: str,
         conn.commit()
 
 
+def add_focus_session_link(focus_session_id: int, session_category: str, date: str, total_mins: int, label: str):
+    with get_connection() as conn:
+        conn.execute("""
+            INSERT OR REPLACE INTO focus_session_links
+            (focus_session_id, session_category, date, total_mins, label)
+            VALUES (?, ?, ?, ?, ?)
+        """, (focus_session_id, session_category, date, total_mins, label))
+        conn.commit()
+
+
+def update_focus_session_summary(focus_session_id: int, summary: str, total_mins: int, last_active_date: str):
+    with get_connection() as conn:
+        conn.execute("""
+            UPDATE focus_sessions SET summary = ?, total_mins = ?, last_active_date = ? WHERE id = ?
+        """, (summary, total_mins, last_active_date, focus_session_id))
+        conn.commit()
+
+
+def get_focus_session_links(focus_session_id: int) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute("""
+            SELECT * FROM focus_session_links WHERE focus_session_id = ?
+            ORDER BY date DESC
+        """, (focus_session_id,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def add_focus_session_note(focus_session_id: int, note: str):
+    with get_connection() as conn:
+        conn.execute("INSERT INTO focus_session_notes (focus_session_id, note) VALUES (?, ?)", (focus_session_id, note))
+        conn.commit()
+
+
+def delete_focus_session_note(note_id: int):
+    with get_connection() as conn:
+        conn.execute("DELETE FROM focus_session_notes WHERE id = ?", (note_id,))
+        conn.commit()
+
+
+def get_focus_session_notes(focus_session_id: int) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute("""
+            SELECT * FROM focus_session_notes WHERE focus_session_id = ? ORDER BY created_at DESC
+        """, (focus_session_id,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def complete_focus_session(focus_session_id: int):
+    with get_connection() as conn:
+        conn.execute("UPDATE focus_sessions SET completed_at = datetime('now') WHERE id = ?", (focus_session_id,))
+        conn.commit()
+
+
 def get_all_focus_sessions() -> list[dict]:
     today = datetime.now().strftime("%Y-%m-%d")
     with get_connection() as conn:
-        rows = conn.execute("SELECT * FROM focus_sessions ORDER BY created_at ASC").fetchall()
+        rows = conn.execute(
+            "SELECT * FROM focus_sessions WHERE completed_at IS NULL ORDER BY created_at ASC"
+        ).fetchall()
         focus_sessions = [dict(r) for r in rows]
-        for focus_session in focus_sessions:
-            # Check today's completion
+        for fs in focus_sessions:
             done = conn.execute(
                 "SELECT 1 FROM focus_session_completions WHERE focus_session_id = ? AND date = ?",
-                (focus_session["id"], today)
+                (fs["id"], today)
             ).fetchone()
-            focus_session["done_today"] = bool(done)
-            # Calculate streak
-            focus_session["streak"] = _calc_streak(conn, focus_session["id"])
+            fs["done_today"] = bool(done)
+            fs["streak"] = _calc_streak(conn, fs["id"])
+            fs["notes"] = [dict(r) for r in conn.execute(
+                "SELECT * FROM focus_session_notes WHERE focus_session_id = ? ORDER BY created_at DESC",
+                (fs["id"],)
+            ).fetchall()]
+            fs["links"] = [dict(r) for r in conn.execute(
+                "SELECT * FROM focus_session_links WHERE focus_session_id = ? ORDER BY date DESC LIMIT 10",
+                (fs["id"],)
+            ).fetchall()]
     return focus_sessions
 
 
@@ -192,6 +286,20 @@ def toggle_focus_session_completion(focus_session_id: int) -> bool:
             return True
 
 
+def hide_session(session_id: str):
+    today = datetime.now().strftime("%Y-%m-%d")
+    with get_connection() as conn:
+        conn.execute("INSERT OR IGNORE INTO hidden_sessions (session_id, date) VALUES (?, ?)", (session_id, today))
+        conn.commit()
+
+
+def get_hidden_sessions() -> set:
+    today = datetime.now().strftime("%Y-%m-%d")
+    with get_connection() as conn:
+        rows = conn.execute("SELECT session_id FROM hidden_sessions WHERE date = ?", (today,)).fetchall()
+    return {r["session_id"] for r in rows}
+
+
 def save_session_merge(target_id: str, merged_ids: list[str], label: str, summary: str):
     today = datetime.now().strftime("%Y-%m-%d")
     with get_connection() as conn:
@@ -211,6 +319,23 @@ def get_todays_merges() -> list[dict]:
             "SELECT * FROM session_merges WHERE date = ? ORDER BY created_at ASC", (today,)
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def get_uncategorized_activities() -> list[dict]:
+    today = datetime.now().strftime("%Y-%m-%d")
+    with get_connection() as conn:
+        rows = conn.execute("""
+            SELECT id, url, title FROM activities
+            WHERE ai_category IS NULL AND timestamp >= ?
+        """, (today,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_ai_categories(id_category_map: dict[int, str]):
+    with get_connection() as conn:
+        for activity_id, category in id_category_map.items():
+            conn.execute("UPDATE activities SET ai_category = ? WHERE id = ?", (category, activity_id))
+        conn.commit()
 
 
 def get_cached_session(session_id: str) -> tuple[str, str] | None:
@@ -249,15 +374,18 @@ def get_activities_today(page: int = 1, page_size: int = 10) -> tuple[list[dict]
     return results, total
 
 
-def get_emails_today() -> list[dict]:
+def get_emails_today(page: int = 1, page_size: int = 10) -> tuple[list[dict], int]:
     today = datetime.now().strftime("%Y-%m-%d")
+    offset = (page - 1) * page_size
     with get_connection() as conn:
+        total = conn.execute("SELECT COUNT(*) FROM emails WHERE timestamp >= ?", (today,)).fetchone()[0]
         rows = conn.execute("""
             SELECT * FROM emails
             WHERE timestamp >= ?
             ORDER BY timestamp DESC
-        """, (today,)).fetchall()
+            LIMIT ? OFFSET ?
+        """, (today, page_size, offset)).fetchall()
     results = [dict(r) for r in rows]
     for r in results:
         r["timestamp"] = format_timestamp(r["timestamp"])
-    return results
+    return results, total

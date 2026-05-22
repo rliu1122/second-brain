@@ -1,29 +1,112 @@
 <div id="focus-sessions-list">
 {% for fs in focus_sessions %}
-<div class="goal-card {% if fs.done_today %}done{% endif %}">
-    <div class="goal-info">
-        <span class="goal-emoji">{{ fs.emoji }}</span>
-        <div>
-            <strong>{{ fs.name }}</strong>
-            {% if fs.frequency %}<span class="tag">{{ fs.frequency }}</span>{% endif %}
-            {% if fs.streak > 0 %}<span class="streak">🔥 {{ fs.streak }} day streak</span>{% endif %}
+<div class="focus-card {% if fs.done_today %}done{% endif %}">
+
+    <!-- Header -->
+    <div class="focus-header" onclick="toggleFocus(this)">
+        <div class="focus-title-row">
+            <span class="goal-emoji">{{ fs.emoji }}</span>
+            <div>
+                <strong>{{ fs.name }}</strong>
+                <div class="focus-meta">
+                    {% if fs.frequency %}<span class="tag">{{ fs.frequency }}</span>{% endif %}
+                    {% if fs.streak > 0 %}<span class="streak">🔥 {{ fs.streak }} day streak</span>{% endif %}
+                    {% if fs.total_mins > 0 %}
+                        <span style="font-size:12px; color:var(--text-muted)">⏱ {{ fs.total_mins }} mins total</span>
+                    {% endif %}
+                    {% if fs.last_active_date %}
+                        <span style="font-size:12px; color:var(--text-muted)">· last active {{ fs.last_active_date }}</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="focus-actions">
+            <button class="complete-btn {% if fs.done_today %}done{% endif %}"
+                hx-post="/focus_sessions/{{ fs.id }}/toggle"
+                hx-target="#focus-sessions-list"
+                hx-swap="outerHTML"
+                onclick="event.stopPropagation()">
+                {% if fs.done_today %}✅{% else %}⬜{% endif %}
+            </button>
+            <button class="btn btn-sm" style="font-size:11px;"
+                hx-post="/focus_sessions/{{ fs.id }}/complete"
+                hx-target="#focus-sessions-list"
+                hx-swap="outerHTML"
+                hx-confirm="Mark '{{ fs.name }}' as complete and archive it?"
+                onclick="event.stopPropagation()">
+                ✓ Complete
+            </button>
+            <button class="delete-btn"
+                hx-delete="/focus_sessions/{{ fs.id }}"
+                hx-target="#focus-sessions-list"
+                hx-swap="outerHTML"
+                hx-confirm="Delete this focus session?"
+                onclick="event.stopPropagation()">✕</button>
+            <span class="chevron">▾</span>
         </div>
     </div>
-    <div class="goal-actions">
-        <button class="complete-btn {% if fs.done_today %}done{% endif %}"
-            hx-post="/focus_sessions/{{ fs.id }}/toggle"
-            hx-target="#focus-sessions-list"
-            hx-swap="outerHTML">
-            {% if fs.done_today %}✅{% else %}⬜{% endif %}
-        </button>
-        <button class="delete-btn"
-            hx-delete="/focus_sessions/{{ fs.id }}"
-            hx-target="#focus-sessions-list"
-            hx-swap="outerHTML"
-            hx-confirm="Delete this focus session?">✕</button>
+
+    <!-- Expanded details -->
+    <div class="focus-body" style="display:none">
+
+        <!-- AI Summary -->
+        {% if fs.summary %}
+        <div class="focus-summary">
+            <div class="focus-section-label">📊 Progress Summary</div>
+            <p>{{ fs.summary }}</p>
+        </div>
+        {% else %}
+        <div class="focus-summary" style="color:var(--text-muted); font-size:13px;">
+            No summary yet — sync to generate one after adding some activity.
+        </div>
+        {% endif %}
+
+        <!-- Linked sessions -->
+        {% if fs.links %}
+        <div class="focus-section-label" style="margin-top:12px;">🔗 Related Sessions</div>
+        {% for link in fs.links %}
+        <div class="event-row">
+            <span class="tag">{{ link.date }}</span>
+            <span>{{ link.label }}</span>
+            <small>{{ link.total_mins }} mins</small>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        <!-- Notes -->
+        <div class="focus-section-label" style="margin-top:12px;">📝 Notes</div>
+        {% for note in fs.notes %}
+        <div class="note-row">
+            <span>{{ note.note }}</span>
+            <button class="delete-btn"
+                hx-delete="/focus_sessions/notes/{{ note.id }}"
+                hx-target="#focus-sessions-list"
+                hx-swap="outerHTML">✕</button>
+        </div>
+        {% endfor %}
+
+        <form hx-post="/focus_sessions/{{ fs.id }}/notes"
+              hx-target="#focus-sessions-list"
+              hx-swap="outerHTML"
+              style="margin-top:8px; display:flex; gap:8px;">
+            <input type="text" name="note" placeholder="Add a note…"
+                style="flex:1; font-family:inherit; font-size:13px; padding:6px 10px; border:1px solid var(--border); border-radius:7px; outline:none;">
+            <button type="submit" class="btn btn-sm btn-primary">Add</button>
+        </form>
+
     </div>
 </div>
 {% else %}
-<p style="color:#888">No focus sessions yet — add one below or create from a session.</p>
+<div class="empty">No active focus sessions — add one below.</div>
 {% endfor %}
 </div>
+
+<script>
+function toggleFocus(header) {
+    const body = header.nextElementSibling;
+    const chevron = header.querySelector('.chevron');
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : 'block';
+    chevron.textContent = open ? '▾' : '▴';
+}
+</script>
